@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat WebSocket</title>
+    <script src="./sockjs.js"></script>
+    <script src="./stomp.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script type="text/javascript">
+        var stompClient = null;
+
+
+        function auth() {
+            let data = {
+                "code" : "koki",
+                "password": "MASTER"
+            }
+            let result = axios.post(
+            `http://localhost:8081/api/authentication/login`,
+            {"code": "koki", "password": "MASTER" }
+            );
+            console.log(result.data);
+        }
+        function test() {
+
+            var headers = {
+                "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMzU3Iiwicm9sZXMiOiJXQUlURVIiLCJpYXQiOjE2NDM0MTE2NTIsImV4cCI6MTY2MTQxMTY1Mn0._w9o_s9wXxnynmb7gRvZ9YIQNngiAL4nBFCXG4aUqEk"
+            };
+
+            result = axios({
+            method: 'POST',
+            url: `http://localhost:8081/api/orders`,
+            headers: headers,
+            }).then((result) => {
+                console.log(result.data);
+
+            })
+        }
+
+        function setConnected(connected) {
+            document.getElementById('connect').disabled = connected;
+            document.getElementById('disconnect').disabled = !connected;
+            document.getElementById('conversationDiv').style.visibility
+                = connected ? 'visible' : 'hidden';
+            document.getElementById('response').innerHTML = '';
+        }
+
+        function connect() {
+            var headers = {
+                // "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMzU3Iiwicm9sZXMiOiJXQUlURVIiLCJpYXQiOjE2NDM0MTcxMTgsImV4cCI6MTY2MTQxNzExOH0.jX43CNr2pySh-MqU3oomTottBSHnNrtk4Qdu4lG7G9s"
+            };
+
+            var socket = new SockJS('http://localhost:8081/notifications');
+            stompClient = Stomp.over(socket);
+
+            const self = this;
+            stompClient.connect(headers, function(frame) {
+
+                var url = stompClient.ws._transport.url;
+                url = url.replace(
+                "ws://localhost:8081/notifications/",  "");
+                url = url.replace("/websocket", "");
+                url = url.replace(/^[0-9]+\//, "");
+                console.log("Your current session is: " + url);
+                sessionId = url;
+
+                
+                setConnected(true);
+                console.log('Connected: ' + frame);
+                stompClient.subscribe('/topic/notification', function(messageOutput) {
+                    self.showMessageOutput(JSON.parse(messageOutput.body));
+                });
+
+                stompClient.subscribe('/topic/messages', function(messageOutput) {
+                    self.showMessageOutput(JSON.parse(messageOutput.body));
+                });
+
+                stompClient.subscribe('/topic/specific-user' + '-user' + sessionId, function(messageOutput) {
+                    self.showMessageOutput(JSON.parse(messageOutput.body));
+                });
+            });
+        }
+
+        function disconnect() {
+            if(stompClient != null) {
+                stompClient.disconnect();
+            }
+            setConnected(false);
+            console.log("Disconnected");
+        }
+
+        function sendMessage() {
+            var from = document.getElementById('from').value;
+            var text = document.getElementById('text').value;
+            stompClient.send("/app/messages", {},
+                JSON.stringify({'from':from, 'text':text}));
+        }
+
+        function showMessageOutput(messageOutput) {
+            var response = document.getElementById('response');
+            var p = document.createElement('p');
+            p.style.wordWrap = 'break-word';
+            p.appendChild(document.createTextNode(messageOutput.from + ": "
+                + messageOutput.message + " (" + messageOutput.time + ")"));
+            response.appendChild(p);
+        }
+    </script>
+</head>
+<body onload="disconnect()">
+<div>
+    <button id="auth" onclick="auth();">Login</button>
+    <button id="auth" onclick="test();">Test</button>
+
+    <div>
+        <input type="text" id="from" placeholder="Choose a nickname"/>
+    </div>
+    <br />
+    <div>
+        <button id="connect" onclick="connect();">Connect</button>
+        <button id="disconnect" disabled="disabled" onclick="disconnect();">
+            Disconnect
+        </button>
+    </div>
+    <br />
+    <div id="conversationDiv">
+        <input type="text" id="text" placeholder="Write a message..."/>
+        <button id="sendMessage" onclick="sendMessage();">Send</button>
+        <p id="response"></p>
+    </div>
+</div>
+
+</body>
+</html>
